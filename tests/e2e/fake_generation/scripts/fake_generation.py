@@ -17,6 +17,18 @@ STEP_SECONDS = float(os.environ.get("E2E_STEP_SECONDS", "0.25"))
 STEPS = 8
 
 
+def publish_preview(step, prompt):
+    """Mimic the sampler's live preview: a new image + a bumped id every step."""
+    shade = int(255 * step / STEPS)
+    image = Image.new("RGB", (256, 256), (shade, 60, 255 - shade))
+    ImageDraw.Draw(image).text((10, 10), f"step {step}/{STEPS}\n{prompt[:30]}", fill=(255, 255, 255))
+    shared.state.current_image = image
+    shared.state.id_live_preview += 1
+
+
+shared.state.set_current_image = lambda: None  # we set current_image ourselves
+
+
 def make(kind, prompt_index):
     def fake(id_task, request, *args):
         prompt = args[prompt_index]
@@ -27,6 +39,7 @@ def make(kind, prompt_index):
             if shared.state.interrupted:
                 break
             shared.state.sampling_step = i + 1
+            publish_preview(i + 1, prompt)
             time.sleep(STEP_SECONDS)
         if "FAIL" in prompt:
             raise RuntimeError("fake generator failure")

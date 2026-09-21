@@ -12,6 +12,12 @@
 
 While a normal Generate is running, Interrupt / Skip cover only the Generate button, so Queue stays available.
 
+### Ctrl+Enter
+
+Ctrl+Enter (Cmd+Enter on macOS) presses **Queue** instead of Generate — always, whether or not anything is running. With an idle, unpaused queue the job starts immediately, so it still feels like Generate; press it again while a job runs and the next one lines up (no more interrupt-and-restart).
+
+To interrupt or skip use the buttons, Esc (interrupt) or Alt+Enter (skip) — those are unchanged. If the queue is paused the toast says so and nothing starts until you press **Start queue**. Turn the override off in [settings](settings.md) to get Forge's behaviour back.
+
 ## The Queue tab
 
 | Area | What it shows / does |

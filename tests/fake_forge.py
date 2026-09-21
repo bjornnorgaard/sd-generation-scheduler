@@ -77,7 +77,13 @@ class FakeForge:
         self.shared.state = self.state
 
         self.progress = types.ModuleType("modules.progress")
-        self.progress.create_task_id = lambda kind: f"task({kind}-TEST)"
+        self._task_counter = 0
+        self.progress.create_task_id = self._create_task_id
+        self.progress.current_task = None
+        self.progress.pending_tasks = {}
+        self.progress.finished_tasks = []
+        self.progress.recorded_results = []
+        self.progress.add_task_to_queue = lambda id_task: self.progress.pending_tasks.__setitem__(id_task, 0)
 
         self.call_queue = types.ModuleType("modules.call_queue")
         self.call_queue.queue_lock = self.lock
@@ -109,11 +115,19 @@ class FakeForge:
 
         def f(*args, **kwargs):
             assert args and args[0].startswith("task("), "first arg must be a task id"
+            id_task = args[0]
+            self.progress.add_task_to_queue(id_task)
             with self.lock:
-                self.state.begin(job=args[0])
+                self.state.begin(job=id_task)
+                self.progress.pending_tasks.pop(id_task, None)
+                self.progress.current_task = id_task
                 try:
                     res = func(*args, **kwargs)
+                    self.progress.recorded_results.append((id_task, res))
+                    del self.progress.recorded_results[:-2]
                 finally:
+                    self.progress.current_task = None
+                    self.progress.finished_tasks.append(id_task)
                     self.state.skipped = False
                     self.state.interrupted = False
                     self.state.stopping_generation = False
@@ -128,6 +142,10 @@ class FakeForge:
                 return (None, None, "", f"<div class='error'>{exc}</div>")
 
         return safe
+
+    def _create_task_id(self, kind):
+        self._task_counter += 1
+        return f"task({kind}-TEST{self._task_counter})"
 
     def _entry(self, kind):
         def entry(id_task, request, *args):

@@ -54,6 +54,12 @@ Routes under `/gsched/v1` (registered in `on_app_started`, logic in `api.py`, Fa
 
 All `POST` / `DELETE` routes require the header `X-Gsched: 1`.
 
+## Live preview and Ctrl+Enter
+
+The executor registers the job's `task(...)` id with Forge's progress tracker and reports it as `progress.task_id` in `/state`. The page (`gsched_queue.js`) sees a running job whose id it isn't showing yet and calls Forge's own `requestProgress(id, gallery_container, gallery, …)` — progress bar + live preview, driven by the global generation state — and clicks a hidden per-tab **restore** button. That button's event has Generate's outputs and its handler waits for the task to finish and returns the tuple Forge recorded for it, so the images land in the gallery. (Forge's own restore button was not reused: its output list is one shorter than the recorded result.) `previewPlan` in `gsched_core.js` decides when to attach and never does so while a manual Generate is running in that tab.
+
+`isQueueShortcut` recognises Ctrl/Cmd+Enter (without Alt) when the `gsched_override_ctrl_enter` option is on. The keydown listener runs in the capture phase and calls `stopImmediatePropagation`, so Forge's handler never also fires, then clicks the current tab's Queue button. Held-key repeats are swallowed so they can't flood the queue.
+
 ## The Queue tab
 
 `gsched_core.js` is pure (formatting, HTML strings, action → request); `gsched_queue.js` polls `/state` (1 s while the tab is open or work is queued, 4 s otherwise), renders into `#gsched-root` only when the HTML changed, delegates button clicks, and updates the tab title counter. All text is HTML-escaped.

@@ -11,6 +11,7 @@ EXTENSION_ROOT = Path(__file__).resolve().parents[1]
 
 OPT_DEFAULTS: dict[str, object] = {
     constants.OPT_SHOW_QUEUE_BUTTON: True,
+    constants.OPT_OVERRIDE_CTRL_ENTER: True,
     constants.OPT_AUTOSTART_ON_LAUNCH: False,
     constants.OPT_PAUSE_ON_INTERRUPT: True,
     constants.OPT_HISTORY_LIMIT: 100,
@@ -61,6 +62,12 @@ def on_ui_settings() -> None:
         constants.OPT_SHOW_QUEUE_BUTTON,
         "Show a Queue button next to Generate",
         "Reload the UI after changing this.",
+    )
+    add(
+        constants.OPT_OVERRIDE_CTRL_ENTER,
+        "Ctrl+Enter adds to the queue instead of generating",
+        "An idle queue starts the job immediately. Interrupt and Skip stay on their buttons, Esc and "
+        "Alt+Enter. When off, Forge's default applies. Applies after a page reload.",
     )
     add(
         constants.OPT_AUTOSTART_ON_LAUNCH,

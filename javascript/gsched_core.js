@@ -117,6 +117,46 @@
         return total > 0 ? `Queue (${total})` : "Queue";
     }
 
+    // -- live preview & shortcut -----------------------------------------
+
+    /**
+     * Should this keydown be turned into a Queue press?
+     *
+     * Ctrl/Cmd + Enter is Forge's Generate shortcut (interrupt-and-restart while running). With
+     * the override on it queues instead — an idle, unpaused queue starts the job right away, so
+     * it still "generates". Alt+Enter (Skip) and Esc (Interrupt) are not touched.
+     */
+    function isQueueShortcut(event, enabled) {
+        return (
+            !!enabled &&
+            event.key === "Enter" &&
+            (event.ctrlKey || event.metaKey) &&
+            !event.altKey
+        );
+    }
+
+    /**
+     * Decide whether the page should start showing the running queue job's live preview.
+     *
+     * state:   the /state payload
+     * current: { attachedId: id of the job already being shown (or null),
+     *            busyTabs: { txt2img: bool, img2img: bool } — a manual Generate is running there }
+     * Returns { attach: { tab, taskId } | null, clear: bool }. `clear` means forget the previous
+     * attachment (its progress bar removes itself when its task ends).
+     */
+    function previewPlan(state, current) {
+        const attachedId = (current && current.attachedId) || null;
+        const busyTabs = (current && current.busyTabs) || {};
+        const job = state && state.running;
+        const taskId = job && state.progress && state.progress.task_id;
+
+        if (!job || !taskId) return { attach: null, clear: attachedId !== null };
+        if (attachedId === taskId) return { attach: null, clear: false };
+        // Don't fight a manual generation for the same gallery.
+        if (busyTabs[job.kind]) return { attach: null, clear: false };
+        return { attach: { tab: job.kind, taskId }, clear: false };
+    }
+
     // -- actions -------------------------------------------------------
 
     const CLEAR_CONFIRM = {
@@ -320,6 +360,8 @@
         progressFraction,
         progressText,
         tabLabel,
+        isQueueShortcut,
+        previewPlan,
         buildRequest,
         renderState,
     };

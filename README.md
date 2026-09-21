@@ -12,6 +12,8 @@ Press **Queue** instead of Generate and the current settings are saved and run l
 - Captures *everything* Generate would send — prompt, sampler, seed, hires fix, ControlNet units, img2img / inpaint images, other extensions' arguments
 - Remembers the **checkpoint, VAE / text encoders and UNet dtype** per job, so switching models after queueing doesn't change what a queued job uses
 - **Queue tab**: live progress, reorder (top / up / down / bottom), remove, requeue, pause / start, interrupt current, clear queued / history, thumbnails of results
+- **Live preview** of the running queue job in the txt2img / img2img gallery, with the finished images shown when it ends
+- **Ctrl+Enter** queues instead of generating (an idle queue starts the job immediately)
 - Survives restarts (SQLite); a job cut off by a crash is marked *Interrupted* and can be requeued
 - Manual Generate keeps working and shares the WebUI's queue lock — the two never run at the same time
 

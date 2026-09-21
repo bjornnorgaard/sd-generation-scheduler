@@ -25,16 +25,23 @@ from typing import Any
 import gradio as gr
 from gradio.context import Context
 
-from lib_generation_scheduler import constants, enqueue, summary
+from lib_generation_scheduler import constants, enqueue, executor, summary
 
 logger = logging.getLogger("generation_scheduler")
 
 # Runs in the browser before the click is sent. The first argument is a placeholder for the
 # task id the Generate button fills in; the executor assigns a real one. ``arguments`` holds
 # only inputs (this event has no outputs), so nothing needs trimming.
-TOOLTIP = "Add these settings to the generation queue instead of generating now"
+TOOLTIP = "Add these settings to the generation queue instead of generating now (Ctrl+Enter)"
 
 CAPTURE_JS = "function() { return Array.from(arguments); }"
+
+# The Queue tab's script (gsched_queue.js) stores the id of the queue job it is showing in
+# ``window.gschedRestoreId[tab]`` and clicks the hidden restore button; this hands that id to
+# the Python handler as its only input.
+RESTORE_JS_TEMPLATE = (
+    "function() {{ return [(window.gschedRestoreId && window.gschedRestoreId[{tab!r}]) || \"\"]; }}"
+)
 
 
 @dataclass
@@ -43,6 +50,7 @@ class TabWiring:
     blocks: gr.Blocks
     generate_button: gr.Button
     queue_button: gr.Button
+    restore_button: gr.Button
 
 
 def find_generate_function(blocks: gr.Blocks, button: gr.Button, tab: str | None = None):
@@ -75,6 +83,25 @@ def attached_to(blocks: gr.Blocks):
         yield
     finally:
         Context.root_block = previous
+
+
+def make_restore_handler(
+    output_count: int, wait_for_result: Callable[[str], Any] = executor.wait_for_result
+):
+    """Fill the tab's gallery with a queue job's images once that job has finished.
+
+    The recorded result is the very tuple Generate would have returned, so it maps 1:1 onto
+    Generate's outputs. Anything else (never recorded, discarded, wrong shape) leaves the
+    outputs alone.
+    """
+
+    def on_restore(id_task: str):
+        result = wait_for_result(str(id_task or "")) if id_task else None
+        if not isinstance(result, (tuple, list)) or len(result) != output_count:
+            return tuple(gr.skip() for _ in range(output_count))
+        return tuple(result)
+
+    return on_restore
 
 
 def make_click_handler(
@@ -133,7 +160,8 @@ class Wiring:
         # Forge reads this attribute for its hover tooltips (its ``tooltip=`` kwarg is a patch
         # that plain Gradio rejects).
         queue_button.webui_tooltip = TOOLTIP
-        self.tabs[tab] = TabWiring(tab, Context.root_block, component, queue_button)
+        restore_button = gr.Button(visible=False, elem_id=f"{tab}_gsched_restore")
+        self.tabs[tab] = TabWiring(tab, Context.root_block, component, queue_button, restore_button)
 
     def connect_all(self) -> None:
         """Register Queue clicks. Call after the tabs are built, before they are rendered."""
@@ -165,3 +193,13 @@ class Wiring:
                 concurrency_limit=None,
                 show_progress="hidden",
             )
+            outputs = list(generate.outputs)
+            if inputs and outputs:
+                wiring.restore_button.click(
+                    fn=make_restore_handler(len(outputs)),
+                    inputs=[inputs[0]],
+                    outputs=outputs,
+                    js=RESTORE_JS_TEMPLATE.format(tab=wiring.tab),
+                    concurrency_limit=None,
+                    show_progress="hidden",
+                )

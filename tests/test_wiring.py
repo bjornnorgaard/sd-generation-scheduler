@@ -45,6 +45,7 @@ def build_tab(wiring, tab="txt2img", wire_generate=True, decoys=False, gallery=T
             width = gr.Slider(elem_id=f"{tab}_width")
             steps = gr.Slider(elem_id=f"{tab}_steps")
             output = gr.Textbox(elem_id=f"{tab}_gallery" if gallery else None)
+            info = gr.Textbox()
             if decoys:
                 # Like ControlNet: extra handlers on the same click, registered first.
                 for _ in range(2):
@@ -53,7 +54,7 @@ def build_tab(wiring, tab="txt2img", wire_generate=True, decoys=False, gallery=T
                 generate.click(
                     fn=lambda *a: "generated",
                     inputs=[task, prompt, width, steps],
-                    outputs=[output],
+                    outputs=[output, info],
                     js="submit",
                 )
                 generate.click(fn=lambda: None)  # like Forge's .then(cleanup)
@@ -119,6 +120,20 @@ class QueueButtonTests(WiringTestCase):
             find_path(config["layout"], generate._id),
         )
 
+    def test_hidden_restore_button_receives_the_running_jobs_results_into_generates_outputs(self):
+        blocks, generate, inputs = build_tab(self.wiring)
+        self.wiring.connect_all()
+        demo = self.render(blocks)
+        tab = self.wiring.tabs["txt2img"]
+        self.assertEqual(tab.restore_button.elem_id, "txt2img_gsched_restore")
+        self.assertFalse(tab.restore_button.visible)
+        (dep,) = self.queue_dependency(demo, tab.restore_button)
+        generate_dep = self.queue_dependency(demo, generate)[0]
+        self.assertEqual(dep["inputs"], [inputs[0]._id])            # the task-id slot
+        self.assertEqual(dep["outputs"], generate_dep["outputs"])   # gallery, info, …
+        self.assertIn("gschedRestoreId", dep["js"])
+        self.assertIn("'txt2img'", dep["js"])
+
     def test_generate_wiring_is_left_untouched(self):
         blocks, generate, inputs = build_tab(self.wiring)
         self.wiring.connect_all()
@@ -182,6 +197,36 @@ class QueueButtonTests(WiringTestCase):
         function = wiring_module.find_generate_function(blocks, generate)
         self.assertEqual([c._id for c in function.inputs], [c._id for c in inputs])
         self.assertIsNone(wiring_module.find_generate_function(blocks, gr.Button("x")))
+
+
+@unittest.skipIf(gr is None, "gradio not installed")
+class RestoreHandlerTests(unittest.TestCase):
+    def handler(self, result, count=3):
+        calls = []
+
+        def wait(task_id):
+            calls.append(task_id)
+            return result
+
+        return wiring_module.make_restore_handler(count, wait), calls
+
+    def test_returns_the_recorded_result_unchanged(self):
+        handler, calls = self.handler(("gallery", None, "info"))
+        self.assertEqual(handler("task(x)"), ("gallery", None, "info"))
+        self.assertEqual(calls, ["task(x)"])
+
+    def test_missing_or_misshapen_results_leave_outputs_alone(self):
+        for result in (None, ("only", "two"), "string", ("a", "b", "c", "d")):
+            with self.subTest(result=result):
+                handler, _ = self.handler(result)
+                out = handler("task(x)")
+                self.assertEqual(len(out), 3)
+                self.assertTrue(all(o == gr.skip() for o in out))
+
+    def test_empty_id_does_not_wait(self):
+        handler, calls = self.handler(("a", "b", "c"))
+        self.assertEqual(len(handler("")), 3)
+        self.assertEqual(calls, [])
 
 
 class ClickHandlerTests(WiringTestCase):

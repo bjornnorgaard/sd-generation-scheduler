@@ -160,9 +160,23 @@ def extract_result(res: Any, elapsed: float) -> dict[str, Any]:
     return result
 
 
+def wait_for_result(id_task: str, poll_seconds: float = 0.1) -> Any:
+    """Block until ``id_task`` has finished, then return what Forge recorded for it.
+
+    Same idea as ``modules.progress.restore_progress``, but the caller gets the raw
+    return tuple (or ``None`` when it was never recorded / already discarded).
+    """
+    from modules import progress  # noqa: PLC0415
+
+    while id_task == progress.current_task or id_task in progress.pending_tasks:
+        time.sleep(poll_seconds)
+    return next((res for task, res in progress.recorded_results if task == id_task), None)
+
+
 class ForgeExecutor:
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
+        self._task_id: str | None = None
 
     def _entry_point(self, kind: str) -> Callable[..., Any]:
         if kind == "txt2img":
@@ -185,6 +199,10 @@ class ForgeExecutor:
 
         entry = self._entry_point(job.kind)
         id_task = progress.create_task_id(job.kind)
+        # Register as pending *before* advertising the id: the browser starts polling
+        # /internal/progress the moment it sees it, and an unknown id reads as "finished".
+        progress.add_task_to_queue(id_task)
+        self._task_id = id_task
         request = QueuedRequest(job.user)
         captured: dict[str, Any] = {}
 
@@ -208,7 +226,10 @@ class ForgeExecutor:
 
         wrapped = call_queue.wrap_gradio_gpu_call(inner, extra_outputs=[None, None, "", ""])
         started = self._clock()
-        wrapped(id_task, request, *args[1:])
+        try:
+            wrapped(id_task, request, *args[1:])
+        finally:
+            self._task_id = None
         elapsed = self._clock() - started
 
         if captured.get("error"):
@@ -229,6 +250,7 @@ class ForgeExecutor:
 
         state = shared.state
         return {
+            "task_id": self._task_id,
             "step": int(getattr(state, "sampling_step", 0) or 0),
             "steps": int(getattr(state, "sampling_steps", 0) or 0),
             "job_no": int(getattr(state, "job_no", 0) or 0),

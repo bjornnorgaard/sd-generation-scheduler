@@ -21,6 +21,7 @@
     let timer = null;
     let inFlight = false;
     let started = false;
+    let attachedId = null; // queue job whose live preview the txt2img / img2img gallery is showing
 
     function app() {
         return typeof gradioApp === "function" ? gradioApp() : document;
@@ -78,6 +79,44 @@
             });
     }
 
+    /** Is a manual Generate running in this tab? (Forge shows its Interrupt button then.) */
+    function isGenerateBusy(tab) {
+        const interrupt = app().getElementById(`${tab}_interrupt`);
+        return !!interrupt && interrupt.style.display === "block";
+    }
+
+    /**
+     * Show the running queue job in the tab's own gallery, the way a manual Generate does:
+     * Forge's progress bar + live preview, Interrupt / Skip buttons, and — once the job is done —
+     * its images (delivered by the hidden restore button, see wiring.py).
+     */
+    function showJobInGallery(tab, taskId) {
+        const container = app().getElementById(`${tab}_gallery_container`);
+        const gallery = app().getElementById(`${tab}_gallery`);
+        if (!container || typeof requestProgress !== "function") return;
+
+        attachedId = taskId;
+        const setButtons = (show) => {
+            if (typeof showSubmitButtons === "function") showSubmitButtons(tab, show);
+        };
+        setButtons(false);
+        requestProgress(taskId, container, gallery, () => setButtons(true), null, 0);
+
+        window.gschedRestoreId = window.gschedRestoreId || {};
+        window.gschedRestoreId[tab] = taskId;
+        const restore = app().getElementById(`${tab}_gsched_restore`);
+        if (restore) restore.click();
+    }
+
+    function updateGalleryPreview(state) {
+        const plan = Core.previewPlan(state, {
+            attachedId,
+            busyTabs: { txt2img: isGenerateBusy("txt2img"), img2img: isGenerateBusy("img2img") },
+        });
+        if (plan.clear) attachedId = null;
+        if (plan.attach) showJobInGallery(plan.attach.tab, plan.attach.taskId);
+    }
+
     function render(state) {
         const root = getRoot();
         if (!root) return;
@@ -100,6 +139,7 @@
                 showBanner(root, "");
             }
             updateTabLabel(lastState);
+            updateGalleryPreview(lastState);
         } catch (error) {
             if (root) {
                 ensureShell(root);
@@ -145,6 +185,28 @@
             setTimeout(refresh, 2500);
         }
     }
+
+    function overrideEnabled() {
+        try {
+            return typeof opts !== "undefined" && opts.gsched_override_ctrl_enter !== false;
+        } catch (_) {
+            return true;
+        }
+    }
+
+    // Ctrl/Cmd + Enter queues instead of Forge's generate / interrupt-and-restart. Capture phase +
+    // stopImmediatePropagation so Forge's own handler (on document, bubble phase) never sees it.
+    function onKeyDown(event) {
+        if (!Core.isQueueShortcut(event, overrideEnabled())) return;
+        const content = typeof get_uiCurrentTabContent === "function" ? get_uiCurrentTabContent() : null;
+        const button = content && content.querySelector("button[id$=_queue]");
+        if (!button) return; // not on txt2img / img2img: leave the key alone
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (!event.repeat) button.click(); // a held key must not flood the queue
+    }
+
+    window.addEventListener("keydown", onKeyDown, true);
 
     function start() {
         if (started) return;

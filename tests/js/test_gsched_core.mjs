@@ -96,6 +96,33 @@ assertEqual(Core.tabLabel(null), "Queue", "tab label none");
 assertEqual(Core.tabLabel({ running: null, pending: [] }), "Queue", "tab label empty");
 assertEqual(Core.tabLabel({ running: { id: 1 }, pending: [{}, {}] }), "Queue (3)", "tab label counts running + pending");
 
+// isQueueShortcut
+const key = (o) => Object.assign({ key: "Enter", ctrlKey: true, metaKey: false, shiftKey: false, altKey: false }, o);
+assert(Core.isQueueShortcut(key(), true), "ctrl+enter queues");
+assert(Core.isQueueShortcut(key({ ctrlKey: false, metaKey: true }), true), "cmd+enter queues");
+assert(Core.isQueueShortcut(key({ shiftKey: true }), true), "shift does not matter (Forge ignores it too)");
+assert(!Core.isQueueShortcut(key(), false), "override switched off: Forge's default applies");
+assert(!Core.isQueueShortcut(key(), undefined), "no setting value: off");
+assert(!Core.isQueueShortcut(key({ ctrlKey: false }), true), "plain enter is untouched");
+assert(!Core.isQueueShortcut(key({ altKey: true }), true), "alt+enter stays Skip");
+assert(!Core.isQueueShortcut(key({ key: "Escape", ctrlKey: false }), true), "Esc stays Interrupt");
+assert(!Core.isQueueShortcut(key({ key: "a" }), true), "other keys are untouched");
+
+// previewPlan
+const running = (id, kind, extra) => ({ running: { id, kind }, progress: Object.assign({ task_id: `task(${kind}-${id})`, step: 1, steps: 8 }, extra) });
+const idle = { attachedId: null, busyTabs: { txt2img: false, img2img: false } };
+assertEqual(Core.previewPlan(running(1, "txt2img"), idle), { attach: { tab: "txt2img", taskId: "task(txt2img-1)" }, clear: false }, "attach to running txt2img job");
+assertEqual(Core.previewPlan(running(2, "img2img"), idle).attach.tab, "img2img", "attach to running img2img job in its own tab");
+assertEqual(Core.previewPlan(running(1, "txt2img"), { ...idle, attachedId: "task(txt2img-1)" }), { attach: null, clear: false }, "already attached: nothing to do");
+assertEqual(Core.previewPlan(running(2, "txt2img"), { ...idle, attachedId: "task(txt2img-1)" }).attach.taskId, "task(txt2img-2)", "next job attaches even if the previous one was attached");
+assertEqual(Core.previewPlan(running(1, "txt2img"), { ...idle, busyTabs: { txt2img: true, img2img: false } }), { attach: null, clear: false }, "manual generate in that tab: leave it alone");
+assertEqual(Core.previewPlan(running(1, "txt2img"), { ...idle, busyTabs: { txt2img: false, img2img: true } }).attach.tab, "txt2img", "manual generate in the other tab does not matter");
+assertEqual(Core.previewPlan({ running: { id: 1, kind: "txt2img" }, progress: null }, idle), { attach: null, clear: false }, "task id not known yet: wait");
+assertEqual(Core.previewPlan({ running: { id: 1, kind: "txt2img" }, progress: { step: 0 } }, idle), { attach: null, clear: false }, "progress without task id: wait");
+assertEqual(Core.previewPlan({ running: null, progress: null }, { ...idle, attachedId: "task(txt2img-1)" }), { attach: null, clear: true }, "job finished: forget attachment");
+assertEqual(Core.previewPlan({ running: null }, idle), { attach: null, clear: false }, "idle: nothing");
+assertEqual(Core.previewPlan(null, idle), { attach: null, clear: false }, "no state: nothing");
+
 // buildRequest
 assertEqual(Core.buildRequest("pause"), { method: "POST", path: "/gsched/v1/queue/pause" }, "req pause");
 assertEqual(Core.buildRequest("resume"), { method: "POST", path: "/gsched/v1/queue/resume" }, "req resume");

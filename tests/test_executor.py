@@ -39,6 +39,7 @@ class RunTests(ExecutorTestCase):
         (kind, id_task, request, args), = self.forge.calls
         self.assertEqual(kind, "txt2img")
         self.assertRegex(id_task, r"^task\(txt2img-")
+        self.assertEqual(self.forge.progress.recorded_results[-1][0], id_task)
         self.assertEqual(args, ("a cat", 512))  # the id slot is replaced, not forwarded
         self.assertEqual(request.username, "bo")
         self.assertEqual(outcome.status, constants.DONE)
@@ -46,6 +47,27 @@ class RunTests(ExecutorTestCase):
         self.assertEqual(outcome.result["infotext"], "Steps: 20, Seed: 5")
         self.assertEqual(outcome.result["seed"], 5)
         self.assertIn("elapsed", outcome.result)
+
+    def test_task_id_is_pending_before_it_is_advertised_and_gone_after(self):
+        seen = {}
+
+        def entry(id_task, request, *args):
+            seen["advertised"] = self.executor.progress()["task_id"]
+            seen["current"] = self.forge.progress.current_task
+            seen["pending"] = dict(self.forge.progress.pending_tasks)
+            return make_gallery_result([])
+
+        self.forge.txt2img.txt2img = entry
+        self.executor.run(make_job(), ["", "p"])
+        self.assertEqual(seen["advertised"], seen["current"])
+        self.assertRegex(seen["advertised"], r"^task\(txt2img-")
+        self.assertEqual(seen["pending"], {})  # already promoted to current inside the lock
+        self.assertIsNone(self.executor.progress()["task_id"])
+
+    def test_task_id_is_cleared_when_the_run_fails(self):
+        self.forge.raises = RuntimeError("boom")
+        self.executor.run(make_job(), ["", "p"])
+        self.assertIsNone(self.executor.progress()["task_id"])
 
     def test_goes_through_the_queue_lock_wrapper(self):
         self.forge.next_result = make_gallery_result([])
@@ -92,9 +114,39 @@ class RunTests(ExecutorTestCase):
         self.forge.state.sampling_step, self.forge.state.sampling_steps = 4, 20
         self.forge.state.job_no, self.forge.state.job_count = 1, 3
         self.assertEqual(self.executor.progress(),
-                         {"step": 4, "steps": 20, "job_no": 1, "job_count": 3})
+                         {"task_id": None, "step": 4, "steps": 20, "job_no": 1, "job_count": 3})
         self.executor.interrupt()
         self.assertTrue(self.forge.state.interrupted)
+
+
+class WaitForResultTests(ExecutorTestCase):
+    def test_returns_the_recorded_result_of_a_finished_task(self):
+        self.forge.progress.recorded_results = [("task(a)", "A"), ("task(b)", "B")]
+        self.assertEqual(executor.wait_for_result("task(b)"), "B")
+
+    def test_unknown_task_returns_none(self):
+        self.assertIsNone(executor.wait_for_result("task(nope)"))
+
+    def test_waits_while_the_task_is_current_or_pending(self):
+        import threading
+
+        progress = self.forge.progress
+        progress.current_task = "task(a)"
+        progress.pending_tasks["task(a)"] = 0
+        result = {}
+        thread = threading.Thread(
+            target=lambda: result.setdefault("value", executor.wait_for_result("task(a)", poll_seconds=0.01))
+        )
+        thread.start()
+        thread.join(0.1)
+        self.assertTrue(thread.is_alive(), "returned while the task was still running")
+        progress.pending_tasks.clear()
+        thread.join(0.1)
+        self.assertTrue(thread.is_alive(), "returned while the task was still current")
+        progress.recorded_results.append(("task(a)", "DONE"))
+        progress.current_task = None
+        thread.join(2)
+        self.assertEqual(result["value"], "DONE")
 
 
 class ExtractResultTests(unittest.TestCase):

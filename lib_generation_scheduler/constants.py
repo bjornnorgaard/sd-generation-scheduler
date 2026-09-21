@@ -26,6 +26,7 @@ ALL_STATUSES = (PENDING, RUNNING, *FINISHED_STATUSES)
 DB_FILENAME = "queue.sqlite3"
 
 OPT_SHOW_QUEUE_BUTTON = "gsched_show_queue_button"
+OPT_OVERRIDE_CTRL_ENTER = "gsched_override_ctrl_enter"
 OPT_AUTOSTART_ON_LAUNCH = "gsched_autostart_on_launch"
 OPT_PAUSE_ON_INTERRUPT = "gsched_pause_on_interrupt"
 OPT_HISTORY_LIMIT = "gsched_history_limit"

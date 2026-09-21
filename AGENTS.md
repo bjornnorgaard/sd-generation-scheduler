@@ -44,6 +44,8 @@ Option keys and CSS/JS ids use the `gsched_` / `gsched-` prefix; the settings se
 
 - Load order is alphabetical: keep `gsched_core.js` before `gsched_queue.js` (`c` < `q`); don't rename in a way that breaks that.
 - Read settings from the bare global `opts`, never `window.opts`; use `gradioApp()` for DOM lookups; boot with `onUiLoaded` + `onAfterUiUpdate` (the root may not exist yet).
+- Ctrl/Cmd+Enter is overridden (always queues, unless the option is off) in the **capture** phase — Forge's handler is on `document`, bubble; keep Esc / Alt+Enter untouched.
+- The live preview reuses Forge's `requestProgress`; the task id must be registered as pending *before* it is advertised (see `executor.run`).
 - Escape every piece of job text with `GschedCore.escapeHtml` — prompts are user input rendered via `innerHTML`.
 
 ## Testing
