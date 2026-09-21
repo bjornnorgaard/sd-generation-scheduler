@@ -29,9 +29,17 @@ With [sd-webui-state-manager](https://github.com/SenshiSentou/sd-webui-state-man
 | **Toolbar** | State (*Idle / Running / Paused*) and count. **Start queue / Pause queue**, **Interrupt current**, **Clear queued**, **Clear history** |
 | **Now running** | Prompt, settings, progress bar, batch / step, elapsed time |
 | **Up next** | Waiting jobs in run order. ⤒ run next · ▲ up · ▼ down · ⤓ run last · ✕ remove |
-| **History** | Done / Failed / Interrupted jobs, newest first, with error text, run time and thumbnails (click one for the full image). **Requeue** appends a copy; ✕ removes it from history |
+| **History** | Done / Failed / Interrupted jobs, newest first, as a **grid of cards** that uses the full width (as many columns as fit, at least 260 px each). Each card has thumbnails (a large first image, extra outputs as a strip — click one for the full image), status and run time, the prompt, settings, and any error text. **Requeue** appends a copy; ✕ removes it from history |
 
 The tab title shows the number of running + waiting jobs, e.g. **Queue (3)**.
+
+### Reading long prompts
+
+Prompts in *Now running*, *Up next* and *History* are shown as the **start and the end** with the middle left out (`masterpiece, best quality, … a red fox curled up in fresh snow at dawn`), because templates and placeholders usually sit at the start and the distinctive words at the end. Cuts land on whole words, and hovering the `…` tells you how many characters are hidden.
+
+- **Show full prompt / Show less** under a prompt opens or closes that one job; opened, it shows the entire prompt and the negative prompt.
+- **Expand prompts / Collapse prompts** in the toolbar does it for every job at once (remembered in the browser). With it on, a card's own toggle collapses just that one.
+- Short prompts are shown whole and have no toggle unless they also have a negative prompt.
 
 ## Pausing, starting, interrupting
 

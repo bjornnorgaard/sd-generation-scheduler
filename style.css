@@ -157,8 +157,52 @@
 }
 
 .gsched-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.gsched-prompt-text {
+    display: inline;
+}
+
+.gsched-gap {
+    color: var(--body-text-color-subdued);
+    cursor: help;
+    font-weight: bold;
+}
+
+.gsched-prompt-full,
+.gsched-prompt-negative {
+    white-space: pre-wrap;
+    user-select: text;
+}
+
+.gsched-prompt-negative {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--border-color-primary);
+    color: var(--body-text-color-subdued);
+}
+
+.gsched-prompt-negative span {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.gsched-link {
+    display: block;
+    margin: 4px 0 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--link-text-color, var(--color-accent, #f97316));
+    font: inherit;
+    font-size: 0.85em;
+    cursor: pointer;
+    text-decoration: underline;
     white-space: nowrap;
 }
 
@@ -209,9 +253,45 @@
     100% { margin-left: 100%; }
 }
 
-.gsched-finished {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+/* History: a responsive grid of cards that fills the available width. Each column is at
+   least 260px, so wide screens get more columns and narrow ones fall back to one. */
+.gsched-history {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+    gap: 12px;
     align-items: start;
+}
+
+.gsched-history .gsched-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    min-width: 0;
+}
+
+.gsched-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 0 4px;
+}
+
+.gsched-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.gsched-history .gsched-chips {
+    margin-top: 0;
+}
+
+.gsched-history .gsched-row-actions {
+    padding: 0 4px 2px;
+    margin-top: auto;
 }
 
 .gsched-badge {
@@ -244,26 +324,38 @@
     overflow-wrap: anywhere;
 }
 
+/* First image large, any others as a strip beneath it. */
 .gsched-thumbs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 6px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.gsched-thumbs a {
+    display: block;
+    min-width: 0;
+}
+
+.gsched-thumbs a:first-child {
+    grid-column: 1 / -1;
 }
 
 .gsched-thumb {
-    height: 96px;
-    width: auto;
-    max-width: 160px;
+    display: block;
+    width: 100%;
     object-fit: cover;
     border-radius: 6px;
     border: 1px solid var(--border-color-primary);
     background: var(--background-fill-primary);
+    aspect-ratio: 1 / 1;
+}
+
+.gsched-thumbs a:first-child .gsched-thumb {
+    aspect-ratio: 4 / 3;
 }
 
 @media (max-width: 720px) {
-    .gsched-row,
-    .gsched-finished {
+    .gsched-row {
         grid-template-columns: auto minmax(0, 1fr);
     }
 

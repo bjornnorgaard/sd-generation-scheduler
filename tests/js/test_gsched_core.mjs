@@ -61,6 +61,35 @@ assertEqual(Core.jobTitle({ summary: { prompt: "  a   cat\n on a mat " } }), "a 
 assertEqual(Core.jobTitle({ summary: {} }), "(no prompt)", "title empty");
 assertEqual(Core.jobTitle({}), "(no prompt)", "title no summary");
 
+// splitMiddle / truncateMiddle
+assertEqual(Core.splitMiddle("short prompt", 10), { head: "short prompt", tail: "", hidden: 0 }, "short prompt untouched");
+assertEqual(Core.splitMiddle("", 5), { head: "", tail: "", hidden: 0 }, "empty prompt");
+assertEqual(Core.splitMiddle(null, 5), { head: "", tail: "", hidden: 0 }, "null prompt");
+const long = "AAAAA" + "m".repeat(100) + "ZZZZZ";
+assertEqual(Core.splitMiddle(long, 5), { head: "AAAAA", tail: "ZZZZZ", hidden: 100 }, "start and end kept, middle counted");
+assertEqual(Core.truncateMiddle(long, 5), "AAAAA … ZZZZZ", "truncateMiddle joins with an ellipsis");
+assertEqual(Core.splitMiddle("x".repeat(13), 5).hidden, 0, "not truncated when it would hide almost nothing (<= 2*edge+3)");
+assertEqual(Core.splitMiddle("x".repeat(14), 5).hidden, 4, "truncated just past the threshold");
+assertEqual(Core.splitMiddle("  a   b\n\nc  ".repeat(1), 50).head, "a b c", "whitespace collapses before measuring");
+assertEqual(Core.splitMiddle("hello world ".repeat(10) + "END", 10).tail, "world END", "tail is trimmed at its left edge");
+assertEqual(Core.splitMiddle("😀".repeat(30), 5), { head: "😀".repeat(5), tail: "😀".repeat(5), hidden: 20 }, "counts characters, not UTF-16 halves");
+
+// cuts land on word boundaries when a space is nearby
+const sentence = "masterpiece, best quality, highly detailed, sharp focus, cinematic lighting, 8k uhd, dslr, soft film grain, professional color grading, volumetric fog, intricate background details, a red fox curled up in fresh snow at dawn";
+for (let edge = 12; edge <= 90; edge += 3) {
+    const r = Core.splitMiddle(sentence, edge);
+    if (!r.hidden) continue;
+    const ok =
+        sentence.startsWith(r.head) &&
+        sentence.endsWith(r.tail) &&
+        sentence[r.head.length] === " " &&
+        sentence[sentence.length - r.tail.length - 1] === " " &&
+        r.hidden === sentence.length - r.head.length - r.tail.length;
+    assert(ok, `edge ${edge}: head "${r.head.slice(-12)}" / tail "${r.tail.slice(0, 12)}" cut on whole words with an exact hidden count`);
+}
+assertEqual(Core.truncateMiddle(sentence, 30), "masterpiece, best quality, … up in fresh snow at dawn", "worked example");
+assertEqual(Core.splitMiddle("x".repeat(200), 10).head.length, 10, "no spaces to snap to: cut at the exact edge");
+
 // jobDetails
 assertEqual(
     Core.jobDetails({
@@ -225,6 +254,16 @@ hasNot(html, "<script>alert(1)</script>", "error text is escaped");
 has(html, "&lt;script&gt;", "escaped error visible");
 has(html, 'data-gsched-action="requeue" data-gsched-id="3"', "requeue per finished job");
 has(html, 'data-gsched-action="clear-finished">', "clear history enabled with history");
+
+has(html, 'class="gsched-history"', "history grid container");
+assertEqual((html.match(/class="gsched-card gsched-finished"/g) || []).length, 3, "one card per finished job");
+const firstCard = html.slice(html.indexOf('data-gsched-job="4"'), html.indexOf('data-gsched-job="3"'));
+assert(firstCard.indexOf("gsched-thumbs") !== -1 && firstCard.indexOf("gsched-thumbs") < firstCard.indexOf("gsched-title"), "thumbnails come before the prompt in a card");
+assert(firstCard.indexOf("gsched-badge-done") < firstCard.indexOf("gsched-title"), "status badge sits in the card head");
+const noImageCard = html.slice(html.indexOf('data-gsched-job="3"'), html.indexOf('data-gsched-job="2"'));
+hasNot(noImageCard, "gsched-thumbs", "a card without outputs has no image area");
+hasNot(Core.renderState({ ...base, pending: [job(1)] }), "gsched-history", "no history grid when there is no history");
+hasNot(Core.renderState({ ...base, pending: [job(1)] }), "gsched-card gsched-finished", "pending jobs are not history cards");
 
 html = Core.renderState({ ...base, pending: [job(1, { summary: { tab: "txt2img", prompt: `<b onclick="x">hi</b>` } })] });
 hasNot(html, "<b onclick", "prompt is escaped");

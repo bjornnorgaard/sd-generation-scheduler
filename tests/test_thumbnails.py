@@ -26,9 +26,9 @@ class ThumbnailTests(unittest.TestCase):
 
     def test_creates_a_bounded_jpeg(self):
         thumb = thumbnails.thumbnail_for(self.source, self.tmp / "cache", "1-0")
-        self.assertEqual(thumb, self.tmp / "cache" / "1-0-256.jpg")
+        self.assertEqual(thumb, self.tmp / "cache" / "1-0-384.jpg")
         with PILImage.open(thumb) as image:
-            self.assertEqual(image.size, (256, 128))
+            self.assertEqual(image.size, (384, 192))
             self.assertEqual(image.format, "JPEG")
 
     def test_small_images_are_not_upscaled(self):

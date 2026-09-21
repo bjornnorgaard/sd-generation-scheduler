@@ -63,6 +63,51 @@
         return prompt || "(no prompt)";
     }
 
+    // How much of each end of a prompt is shown while it is collapsed. Templates and placeholders
+    // tend to sit at the start and the distinctive words at the end, so the middle goes.
+    const EDGE = { pending: 110, running: 110, finished: 70 };
+
+    /**
+     * Split `text` for a middle-truncated view: the first and last `edge` characters plus the
+     * number of characters left out. Whitespace runs collapse to single spaces first. Nothing is
+     * hidden (hidden = 0, tail = "") unless at least a few characters would actually be saved.
+     */
+    function splitMiddle(text, edge) {
+        const chars = Array.from(String(text === null || text === undefined ? "" : text).replace(/\s+/g, " ").trim());
+        const keep = Math.max(1, Number(edge) || 1);
+        if (chars.length <= keep * 2 + 3) return { head: chars.join(""), tail: "", hidden: 0 };
+
+        // Snap each cut to a word boundary when one is close, so words aren't sliced in half.
+        const SNAP = Math.max(16, Math.floor(keep / 2));
+        let headEnd = keep;
+        if (chars[headEnd] !== " " && chars[headEnd - 1] !== " ") {
+            for (let i = headEnd - 1; i > headEnd - SNAP && i > 0; i--) {
+                if (chars[i] === " ") {
+                    headEnd = i;
+                    break;
+                }
+            }
+        }
+        let tailStart = chars.length - keep;
+        if (chars[tailStart] !== " " && chars[tailStart - 1] !== " ") {
+            for (let i = tailStart + 1; i < tailStart + SNAP && i < chars.length; i++) {
+                if (chars[i - 1] === " ") {
+                    tailStart = i;
+                    break;
+                }
+            }
+        }
+        const head = chars.slice(0, headEnd).join("").trimEnd();
+        const tail = chars.slice(tailStart).join("").trimStart();
+        return { head, tail, hidden: chars.length - Array.from(head).length - Array.from(tail).length };
+    }
+
+    /** `splitMiddle` as one string: "head … tail". */
+    function truncateMiddle(text, edge) {
+        const { head, tail, hidden } = splitMiddle(text, edge);
+        return hidden ? `${head} … ${tail}` : head;
+    }
+
     function jobDetails(job) {
         const s = job.summary || {};
         const details = [];
@@ -236,13 +281,54 @@
         return `<button type="button" class="${cls}" data-gsched-action="${action}"${id}${title}${disabled}>${label}</button>`;
     }
 
+    // A prompt is open when the global "expand all" flag differs from its per-job flip:
+    //   expandAll off: flipped ids are open;  expandAll on: flipped ids are collapsed.
+    function viewOf(view) {
+        const flipped = view && view.flipped ? new Set(Array.from(view.flipped, Number)) : new Set();
+        return { flipped, expandAll: !!(view && view.expandAll) };
+    }
+
+    /**
+     * The prompt of a job: collapsed = start … end with the middle hidden, expanded = the whole
+     * prompt (plus the negative prompt). A toggle appears only when there is more to show.
+     */
+    function renderPrompt(job, view, edge) {
+        const v = viewOf(view);
+        const summary = job.summary || {};
+        const full = String(summary.prompt || "").trim();
+        const negative = String(summary.negative_prompt || "").trim();
+        const open = v.expandAll !== v.flipped.has(Number(job.id));
+        const parts = splitMiddle(full, edge);
+        const canToggle = parts.hidden > 0 || negative !== "";
+
+        let body;
+        if (open) {
+            body =
+                `<div class="gsched-prompt-full">${escapeHtml(full || "(no prompt)")}</div>` +
+                (negative ? `<div class="gsched-prompt-negative"><span>Negative</span>${escapeHtml(negative)}</div>` : "");
+        } else if (!full) {
+            body = `<div class="gsched-prompt-text">(no prompt)</div>`;
+        } else if (parts.hidden) {
+            body =
+                `<div class="gsched-prompt-text">${escapeHtml(parts.head)}` +
+                `<span class="gsched-gap" title="${parts.hidden} characters hidden"> … </span>${escapeHtml(parts.tail)}</div>`;
+        } else {
+            body = `<div class="gsched-prompt-text">${escapeHtml(parts.head)}</div>`;
+        }
+
+        const toggle = canToggle
+            ? `<button type="button" class="gsched-link" data-gsched-action="toggle-prompt" data-gsched-id="${escapeHtml(job.id)}" aria-expanded="${open}">${open ? "Show less" : "Show full prompt"}</button>`
+            : "";
+        return `<div class="gsched-title${open ? " gsched-open" : ""}">${body}${toggle}</div>`;
+    }
+
     function detailsHtml(job) {
         return jobDetails(job)
             .map((d) => `<span class="gsched-chip">${escapeHtml(d)}</span>`)
             .join("");
     }
 
-    function renderToolbar(state) {
+    function renderToolbar(state, view) {
         const pending = (state.pending || []).length;
         const running = state.running;
         let status;
@@ -270,6 +356,9 @@
                 disabled: !running,
                 title: "Stop the running job now",
             }) +
+            button("toggle-all-prompts", viewOf(view).expandAll ? "Collapse prompts" : "Expand prompts", {
+                title: "Show every prompt in full, or only its start and end",
+            }) +
             button("clear-pending", "Clear queued", { disabled: pending === 0 }) +
             button("clear-finished", "Clear history", {
                 disabled: (state.finished || []).length === 0,
@@ -278,7 +367,7 @@
         );
     }
 
-    function renderRunning(state) {
+    function renderRunning(state, view) {
         const job = state.running;
         if (!job) return "";
         const fraction = progressFraction(state.progress);
@@ -287,7 +376,7 @@
         return (
             `<section class="gsched-section"><h3>Now running</h3>` +
             `<div class="gsched-card gsched-running" data-gsched-job="${job.id}">` +
-            `<div class="gsched-title" title="${escapeHtml(jobTitle(job))}">${escapeHtml(jobTitle(job))}</div>` +
+            renderPrompt(job, view, EDGE.running) +
             `<div class="gsched-chips">${detailsHtml(job)}</div>` +
             `<div class="gsched-progress"><div class="gsched-progress-bar${fraction === null ? " gsched-indeterminate" : ""}" style="width:${width}%"></div></div>` +
             `<div class="gsched-meta">${escapeHtml(progressText(state.progress))}${elapsed ? ` · ${escapeHtml(elapsed)}` : ""}</div>` +
@@ -295,7 +384,7 @@
         );
     }
 
-    function renderPending(state) {
+    function renderPending(state, view) {
         const jobs = state.pending || [];
         let body;
         if (jobs.length === 0) {
@@ -308,7 +397,7 @@
                     return (
                         `<div class="gsched-row" data-gsched-job="${job.id}">` +
                         `<div class="gsched-pos">${index + 1}</div>` +
-                        `<div class="gsched-main"><div class="gsched-title" title="${escapeHtml(jobTitle(job))}">${escapeHtml(jobTitle(job))}</div>` +
+                        `<div class="gsched-main">${renderPrompt(job, view, EDGE.pending)}` +
                         `<div class="gsched-chips">${detailsHtml(job)}</div></div>` +
                         `<div class="gsched-when">${escapeHtml(formatAgo(state.now, job.created_at))}</div>` +
                         `<div class="gsched-row-actions">` +
@@ -337,22 +426,25 @@
             .join("");
     }
 
-    function renderFinished(state) {
+    function renderFinished(state, view) {
         const jobs = state.finished || [];
         if (jobs.length === 0) return "";
-        const rows = jobs
+        const cards = jobs
             .map((job) => {
                 const elapsed = job.result && job.result.elapsed ? formatDuration(job.result.elapsed) : "";
                 const thumbs = renderThumbs(job);
                 const error = job.error ? `<div class="gsched-error">${escapeHtml(job.error)}</div>` : "";
                 return (
-                    `<div class="gsched-row gsched-finished" data-gsched-job="${job.id}">` +
-                    `<div class="gsched-badge gsched-badge-${escapeHtml(job.status)}">${escapeHtml(STATUS_LABELS[job.status] || job.status)}</div>` +
-                    `<div class="gsched-main"><div class="gsched-title" title="${escapeHtml(jobTitle(job))}">${escapeHtml(jobTitle(job))}</div>` +
-                    `<div class="gsched-chips">${detailsHtml(job)}</div>${error}` +
+                    `<div class="gsched-card gsched-finished" data-gsched-job="${job.id}">` +
                     (thumbs ? `<div class="gsched-thumbs">${thumbs}</div>` : "") +
+                    `<div class="gsched-card-body">` +
+                    `<div class="gsched-card-head">` +
+                    `<span class="gsched-badge gsched-badge-${escapeHtml(job.status)}">${escapeHtml(STATUS_LABELS[job.status] || job.status)}</span>` +
+                    `<span class="gsched-when">${escapeHtml(elapsed || formatAgo(state.now, job.finished_at))}</span>` +
                     `</div>` +
-                    `<div class="gsched-when">${escapeHtml(elapsed || formatAgo(state.now, job.finished_at))}</div>` +
+                    renderPrompt(job, view, EDGE.finished) +
+                    `<div class="gsched-chips">${detailsHtml(job)}</div>${error}` +
+                    `</div>` +
                     `<div class="gsched-row-actions">` +
                     button("requeue", "↻ Requeue", { id: job.id, title: "Add a copy to the end of the queue" }) +
                     button("remove", "✕", { id: job.id, classes: ["gsched-danger"], title: "Remove from history" }) +
@@ -360,12 +452,24 @@
                 );
             })
             .join("");
-        return `<section class="gsched-section"><h3>History <span class="gsched-count">${jobs.length}</span></h3>${rows}</section>`;
+        return (
+            `<section class="gsched-section"><h3>History <span class="gsched-count">${jobs.length}</span></h3>` +
+            `<div class="gsched-history">${cards}</div></section>`
+        );
     }
 
-    function renderState(state) {
+    /**
+     * `view` is the client-side display state: { expandAll: bool, flipped: ids whose open / closed
+     * state is the opposite of expandAll }.
+     */
+    function renderState(state, view) {
         if (!state) return `<p class="gsched-loading">Loading queue…</p>`;
-        return renderToolbar(state) + renderRunning(state) + renderPending(state) + renderFinished(state);
+        return (
+            renderToolbar(state, view) +
+            renderRunning(state, view) +
+            renderPending(state, view) +
+            renderFinished(state, view)
+        );
     }
 
     return {
@@ -376,6 +480,9 @@
         formatDuration,
         formatAgo,
         jobTitle,
+        EDGE,
+        splitMiddle,
+        truncateMiddle,
         jobDetails,
         progressFraction,
         progressText,

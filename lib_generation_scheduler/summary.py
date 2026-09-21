@@ -31,7 +31,9 @@ ROLE_ELEM_IDS: dict[str, str] = {
 # Roles only worth showing on some tabs.
 _TAB_ONLY = {"denoising_strength": ("img2img",), "hires": ("txt2img",)}
 
-PROMPT_LIMIT = 400
+# Sanity cap only: the Queue tab shows the full prompt (and truncates the middle itself), so this
+# must be far above any real prompt.
+PROMPT_LIMIT = 20000
 
 # The Queue button's script puts a browser-generated token in the (otherwise unused) task-id
 # slot, so the page can match a job to the UI snapshot it took when the button was pressed.

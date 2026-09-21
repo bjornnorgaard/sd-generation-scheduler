@@ -7,7 +7,7 @@ from pathlib import Path
 
 logger = logging.getLogger("generation_scheduler")
 
-THUMB_SIZE = 256
+THUMB_SIZE = 384
 
 
 def thumbnail_for(source: Path, cache_dir: Path, name: str, size: int = THUMB_SIZE) -> Path:

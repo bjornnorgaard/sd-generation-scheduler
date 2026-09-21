@@ -55,10 +55,18 @@ class BuildSummaryTests(unittest.TestCase):
 
     def test_long_prompt_clipped(self):
         args = list(self.args)
-        args[1] = "x" * 1000
+        args[1] = "x" * (summary.PROMPT_LIMIT + 500)
         result = summary.build_summary("txt2img", args, self.roles)
         self.assertEqual(len(result["prompt"]), summary.PROMPT_LIMIT)
         self.assertTrue(result["prompt"].endswith("…"))
+
+    def test_realistic_long_prompts_are_kept_whole(self):
+        args = list(self.args)
+        args[1] = "template words, " * 200 + "the distinctive ending"
+        args[2] = "bad, " * 300 + "worst quality"
+        result = summary.build_summary("txt2img", args, self.roles)
+        self.assertEqual(result["prompt"], args[1])
+        self.assertEqual(result["negative_prompt"], args[2])
 
     def test_missing_roles_and_short_args_are_tolerated(self):
         self.assertEqual(summary.build_summary("txt2img", ["", "p"], self.roles),

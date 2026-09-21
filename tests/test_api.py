@@ -132,7 +132,7 @@ class QueueApiTests(ApiTestCase):
         self.assertEqual(status, 200)
         self.assertNotEqual(thumb, image)
         with PILImage.open(thumb) as opened:
-            self.assertEqual(opened.size, (256, 128))
+            self.assertEqual(opened.size, (384, 192))
         mtime = thumb.stat().st_mtime_ns
         self.assertEqual(self.api.output_file(job.id, 0, thumbnail=True)[1], thumb)
         self.assertEqual(thumb.stat().st_mtime_ns, mtime)  # served from cache

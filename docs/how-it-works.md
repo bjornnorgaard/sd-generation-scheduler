@@ -70,4 +70,4 @@ State Manager records the UI state by wrapping Forge's `submit()`, and saves it 
 
 ## The Queue tab
 
-`gsched_core.js` is pure (formatting, HTML strings, action → request); `gsched_queue.js` polls `/state` (1 s while the tab is open or work is queued, 4 s otherwise), renders into `#gsched-root` only when the HTML changed, delegates button clicks, and updates the tab title counter. All text is HTML-escaped.
+`gsched_core.js` is pure (formatting, HTML strings, action → request, and `splitMiddle` — the head/tail prompt view, snapped to word boundaries; the server stores the full prompt, capped at 20,000 characters as a sanity limit); `gsched_queue.js` polls `/state` (1 s while the tab is open or work is queued, 4 s otherwise), renders into `#gsched-root` only when the HTML changed, delegates button clicks, and updates the tab title counter. All text is HTML-escaped.

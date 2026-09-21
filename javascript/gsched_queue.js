@@ -21,6 +21,25 @@
     let timer = null;
     let inFlight = false;
     let started = false;
+
+    // Display-only state (per viewer): which prompts are shown in full (see GschedCore.renderState).
+    const view = { flipped: new Set(), expandAll: loadExpandAll() };
+
+    function loadExpandAll() {
+        try {
+            return localStorage.getItem("gsched_expand_all") === "1";
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function saveExpandAll() {
+        try {
+            localStorage.setItem("gsched_expand_all", view.expandAll ? "1" : "0");
+        } catch (_) {
+            /* private mode etc.: the toggle just won't persist */
+        }
+    }
     let attachedId = null; // queue job whose live preview the txt2img / img2img gallery is showing
 
     function app() {
@@ -203,7 +222,7 @@
         const root = getRoot();
         if (!root) return;
         ensureShell(root);
-        const html = Core.renderState(state);
+        const html = Core.renderState(state, view);
         if (html !== lastHtml) {
             root.querySelector(".gsched-body").innerHTML = html;
             lastHtml = html;
@@ -242,9 +261,27 @@
         }, delay);
     }
 
+    /** Purely client-side actions (no request): prompt expand / collapse. Returns true if handled. */
+    function toggleView(action, id) {
+        if (action === "toggle-prompt") {
+            const key = Number(id);
+            if (view.flipped.has(key)) view.flipped.delete(key);
+            else view.flipped.add(key);
+        } else if (action === "toggle-all-prompts") {
+            view.expandAll = !view.expandAll;
+            view.flipped.clear();
+            saveExpandAll();
+        } else {
+            return false;
+        }
+        if (lastState) render(lastState);
+        return true;
+    }
+
     async function onClick(event) {
         const button = event.target.closest("[data-gsched-action]");
         if (!button || button.disabled) return;
+        if (toggleView(button.dataset.gschedAction, button.dataset.gschedId)) return;
         const request = Core.buildRequest(button.dataset.gschedAction, button.dataset.gschedId);
         if (!request) return;
         if (request.confirm && !window.confirm(request.confirm)) return;
