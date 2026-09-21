@@ -1,0 +1,274 @@
+/* Generation Scheduler — scoped to gsched- classes and the *_queue button ids. */
+
+/* -- Queue button beside Generate ------------------------------------------ */
+
+.generate-box .gsched-queue-button {
+    flex: 0 0 var(--gsched-queue-width, 7em);
+    min-width: 0;
+}
+
+/* Interrupt / Skip overlay the Generate button while a job runs; keep the Queue
+   button clickable by shrinking the overlays to the Generate button's area. */
+.generate-box:has(.gsched-queue-button) {
+    --gsched-queue-width: 7em;
+    --gsched-gap: var(--layout-gap, 16px);
+}
+
+/* min-width: 0 because Gradio buttons default to min-width: min(160px, 100%). */
+.generate-box:has(.gsched-queue-button) .gradio-button.generate-box-interrupt,
+.generate-box:has(.gsched-queue-button) .gradio-button.generate-box-interrupting {
+    min-width: 0;
+    width: calc((100% - var(--gsched-queue-width) - var(--gsched-gap)) / 2);
+}
+
+.generate-box:has(.gsched-queue-button) .gradio-button.generate-box-skip {
+    min-width: 0;
+    right: calc(var(--gsched-queue-width) + var(--gsched-gap));
+    width: calc((100% - var(--gsched-queue-width) - var(--gsched-gap)) / 2);
+}
+
+/* -- Queue tab ------------------------------------------------------------- */
+
+.gsched-root {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 4px 2px 24px;
+    color: var(--body-text-color);
+}
+
+.gsched-loading,
+.gsched-empty {
+    color: var(--body-text-color-subdued);
+    margin: 4px 0;
+}
+
+.gsched-banner {
+    padding: 8px 12px;
+    border-radius: var(--radius-md, 8px);
+    background: color-mix(in srgb, var(--error-background-fill, #b91c1c) 25%, transparent);
+    border: 1px solid var(--error-border-color, #b91c1c);
+}
+
+.gsched-banner[hidden] {
+    display: none;
+}
+
+.gsched-body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.gsched-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+}
+
+.gsched-status-running strong {
+    color: var(--color-accent, #2563eb);
+}
+
+.gsched-status-paused strong {
+    color: #d97706;
+}
+
+.gsched-actions,
+.gsched-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.gsched-btn {
+    padding: 5px 11px;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--button-secondary-border-color, var(--border-color-primary));
+    background: var(--button-secondary-background-fill, var(--background-fill-secondary));
+    color: var(--button-secondary-text-color, var(--body-text-color));
+    cursor: pointer;
+    font: inherit;
+    line-height: 1.3;
+}
+
+.gsched-btn:hover:not(:disabled) {
+    background: var(--button-secondary-background-fill-hover, var(--background-fill-primary));
+}
+
+.gsched-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.gsched-btn.gsched-primary {
+    background: var(--button-primary-background-fill, #f97316);
+    border-color: var(--button-primary-border-color, transparent);
+    color: var(--button-primary-text-color, #fff);
+}
+
+.gsched-btn.gsched-danger:hover:not(:disabled) {
+    border-color: var(--error-border-color, #b91c1c);
+    color: var(--error-text-color, #b91c1c);
+}
+
+.gsched-section h3 {
+    margin: 0 0 8px;
+    font-size: 1.05em;
+}
+
+.gsched-count {
+    margin-left: 6px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--background-fill-secondary);
+    border: 1px solid var(--border-color-primary);
+    font-size: 0.8em;
+    font-weight: normal;
+}
+
+.gsched-card,
+.gsched-row {
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--radius-md, 8px);
+    background: var(--background-fill-secondary);
+    padding: 8px 12px;
+}
+
+.gsched-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 6px 12px;
+    margin-bottom: 6px;
+}
+
+.gsched-pos {
+    min-width: 1.6em;
+    text-align: center;
+    color: var(--body-text-color-subdued);
+    font-variant-numeric: tabular-nums;
+}
+
+.gsched-main {
+    min-width: 0;
+}
+
+.gsched-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gsched-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 3px;
+}
+
+.gsched-chip {
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--background-fill-primary);
+    border: 1px solid var(--border-color-primary);
+    color: var(--body-text-color-subdued);
+    font-size: 0.8em;
+}
+
+.gsched-when,
+.gsched-meta {
+    color: var(--body-text-color-subdued);
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+.gsched-progress {
+    height: 8px;
+    margin: 8px 0 4px;
+    border-radius: 999px;
+    background: var(--background-fill-primary);
+    overflow: hidden;
+}
+
+.gsched-progress-bar {
+    height: 100%;
+    background: var(--color-accent, #f97316);
+    transition: width 0.4s ease;
+}
+
+.gsched-progress-bar.gsched-indeterminate {
+    width: 30% !important;
+    animation: gsched-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes gsched-slide {
+    0% { margin-left: -30%; }
+    100% { margin-left: 100%; }
+}
+
+.gsched-finished {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: start;
+}
+
+.gsched-badge {
+    padding: 1px 9px;
+    border-radius: 999px;
+    font-size: 0.8em;
+    border: 1px solid var(--border-color-primary);
+    white-space: nowrap;
+}
+
+.gsched-badge-done {
+    background: color-mix(in srgb, #16a34a 22%, transparent);
+    border-color: #16a34a;
+}
+
+.gsched-badge-failed {
+    background: color-mix(in srgb, #dc2626 22%, transparent);
+    border-color: #dc2626;
+}
+
+.gsched-badge-interrupted {
+    background: color-mix(in srgb, #d97706 22%, transparent);
+    border-color: #d97706;
+}
+
+.gsched-error {
+    margin-top: 4px;
+    color: var(--error-text-color, #dc2626);
+    font-size: 0.85em;
+    overflow-wrap: anywhere;
+}
+
+.gsched-thumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.gsched-thumb {
+    height: 96px;
+    width: auto;
+    max-width: 160px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border-color-primary);
+    background: var(--background-fill-primary);
+}
+
+@media (max-width: 720px) {
+    .gsched-row,
+    .gsched-finished {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .gsched-when,
+    .gsched-row-actions {
+        grid-column: 2;
+    }
+}
