@@ -71,6 +71,19 @@ class BuildSummaryTests(unittest.TestCase):
         result = summary.build_summary("txt2img", args, self.roles)
         self.assertEqual(result["steps"], "['weird']")
 
+    def test_client_token_from_the_task_id_slot_is_kept(self):
+        args = list(self.args)
+        args[0] = "gsched-abc123"
+        self.assertEqual(summary.build_summary("txt2img", args, self.roles)["client_token"], "gsched-abc123")
+
+    def test_other_task_id_values_are_not_treated_as_tokens(self):
+        for value in ("", None, "task(x)", 5, "gsched-" + "x" * 80):
+            args = list(self.args)
+            args[0] = value
+            with self.subTest(value=value):
+                self.assertNotIn("client_token", summary.build_summary("txt2img", args, self.roles))
+        self.assertNotIn("client_token", summary.build_summary("txt2img", [], self.roles))
+
     def test_empty_values_omitted(self):
         args = list(self.args)
         args[12] = ""

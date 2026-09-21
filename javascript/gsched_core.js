@@ -117,6 +117,25 @@
         return total > 0 ? `Queue (${total})` : "Queue";
     }
 
+    // -- State Manager compatibility ----------------------------------------
+
+    const TOKEN_PREFIX = "gsched-";
+
+    function makeToken(random) {
+        const r = typeof random === "function" ? random : Math.random;
+        return TOKEN_PREFIX + r().toString(36).slice(2, 10) + r().toString(36).slice(2, 10);
+    }
+
+    /**
+     * Remove and return the oldest entry for `tab` from `fifo` (jobs shown in the gallery, in the
+     * order their results will be delivered), or null. Each attach queues one entry and each
+     * delivery consumes one, so results always meet the snapshot of *their* job.
+     */
+    function takeStateEntry(fifo, tab) {
+        const index = fifo.findIndex((entry) => entry.tab === tab);
+        return index === -1 ? null : fifo.splice(index, 1)[0];
+    }
+
     // -- live preview & shortcut -----------------------------------------
 
     /**
@@ -154,7 +173,8 @@
         if (attachedId === taskId) return { attach: null, clear: false };
         // Don't fight a manual generation for the same gallery.
         if (busyTabs[job.kind]) return { attach: null, clear: false };
-        return { attach: { tab: job.kind, taskId }, clear: false };
+        const token = (job.summary && job.summary.client_token) || null;
+        return { attach: { tab: job.kind, taskId, token }, clear: false };
     }
 
     // -- actions -------------------------------------------------------
@@ -360,6 +380,9 @@
         progressFraction,
         progressText,
         tabLabel,
+        TOKEN_PREFIX,
+        makeToken,
+        takeStateEntry,
         isQueueShortcut,
         previewPlan,
         buildRequest,

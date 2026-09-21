@@ -29,18 +29,30 @@ from lib_generation_scheduler import constants, enqueue, executor, summary
 
 logger = logging.getLogger("generation_scheduler")
 
-# Runs in the browser before the click is sent. The first argument is a placeholder for the
-# task id the Generate button fills in; the executor assigns a real one. ``arguments`` holds
-# only inputs (this event has no outputs), so nothing needs trimming.
 TOOLTIP = "Add these settings to the generation queue instead of generating now (Ctrl+Enter)"
 
-CAPTURE_JS = "function() { return Array.from(arguments); }"
+# Runs in the browser before the click is sent. ``arguments`` holds only inputs (this event has
+# no outputs), so nothing needs trimming. The first argument is the task-id slot the Generate
+# button fills in; the executor assigns a real id, so we use it to carry a token that lets the
+# page pair this job with the UI snapshot it takes now (see gsched_queue.js, State Manager).
+# Async on purpose: the snapshot must be finished before the request is sent, otherwise it can
+# read controls the user has already changed (State Manager's own Generate wrapper awaits too).
+CAPTURE_JS_TEMPLATE = (
+    "async function() {{ const args = Array.from(arguments); "
+    "if (window.gschedNoteQueuePress) args[0] = await window.gschedNoteQueuePress({tab!r}); "
+    "return args; }}"
+)
 
 # The Queue tab's script (gsched_queue.js) stores the id of the queue job it is showing in
 # ``window.gschedRestoreId[tab]`` and clicks the hidden restore button; this hands that id to
 # the Python handler as its only input.
 RESTORE_JS_TEMPLATE = (
     "function() {{ return [(window.gschedRestoreId && window.gschedRestoreId[{tab!r}]) || \"\"]; }}"
+)
+
+# Runs after the restore event has put the finished job's images into the gallery.
+DELIVERED_JS_TEMPLATE = (
+    "function() {{ if (window.gschedDelivered) return window.gschedDelivered({tab!r}); }}"
 )
 
 
@@ -187,7 +199,7 @@ class Wiring:
                 fn=handler,
                 inputs=inputs,
                 outputs=None,
-                js=CAPTURE_JS,
+                js=CAPTURE_JS_TEMPLATE.format(tab=wiring.tab),
                 # Must go through Gradio's queue: gr.Info / gr.Error toasts need an event id.
                 # No concurrency limit so it never waits behind a running generation.
                 concurrency_limit=None,
@@ -201,5 +213,9 @@ class Wiring:
                     outputs=outputs,
                     js=RESTORE_JS_TEMPLATE.format(tab=wiring.tab),
                     concurrency_limit=None,
+                    show_progress="hidden",
+                ).then(
+                    fn=None,
+                    js=DELIVERED_JS_TEMPLATE.format(tab=wiring.tab),
                     show_progress="hidden",
                 )

@@ -33,6 +33,10 @@ _TAB_ONLY = {"denoising_strength": ("img2img",), "hires": ("txt2img",)}
 
 PROMPT_LIMIT = 400
 
+# The Queue button's script puts a browser-generated token in the (otherwise unused) task-id
+# slot, so the page can match a job to the UI snapshot it took when the button was pressed.
+CLIENT_TOKEN_PREFIX = "gsched-"
+
 
 def resolve_roles(tab: str, elem_ids: Sequence[str | None]) -> dict[str, int]:
     """Map summary roles to positions in the argument list, by component ``elem_id``."""
@@ -65,6 +69,9 @@ def build_summary(tab: str, args: Sequence[Any], roles: dict[str, int]) -> dict[
         return value if isinstance(value, (str, int, float, bool)) or value is None else str(value)
 
     summary: dict[str, Any] = {"tab": tab}
+    token = args[0] if args else None
+    if isinstance(token, str) and token.startswith(CLIENT_TOKEN_PREFIX) and len(token) <= 64:
+        summary["client_token"] = token
     for role in ("prompt", "negative_prompt"):
         value = get(role)
         if value is not None:

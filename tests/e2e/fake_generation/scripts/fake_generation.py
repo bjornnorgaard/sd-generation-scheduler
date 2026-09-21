@@ -49,7 +49,10 @@ def make(kind, prompt_index):
         image.save(path)
         image.already_saved_as = path
         info = {"infotexts": [f"{prompt}\nSteps: {STEPS}, Seed: 42"], "seed": 42}
-        return ({"value": [image], "visible": True, "__type__": "update"}, None, json.dumps(info), "", "")
+        # Real Forge fills the info box with the infotext, including "Seed: N"; extensions such as
+        # State Manager read the seed back from it.
+        info_html = f"<p>{prompt}<br>Steps: {STEPS}, Seed: 42</p>"
+        return ({"value": [image], "visible": True, "__type__": "update"}, None, json.dumps(info), info_html, "")
 
     return fake
 

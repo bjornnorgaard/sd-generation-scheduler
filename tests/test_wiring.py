@@ -134,6 +134,28 @@ class QueueButtonTests(WiringTestCase):
         self.assertIn("gschedRestoreId", dep["js"])
         self.assertIn("'txt2img'", dep["js"])
 
+    def test_delivery_hook_runs_after_the_restore_event_updates_the_gallery(self):
+        blocks, _, _ = build_tab(self.wiring)
+        self.wiring.connect_all()
+        demo = self.render(blocks)
+        tab = self.wiring.tabs["txt2img"]
+        (restore,) = self.queue_dependency(demo, tab.restore_button)
+        followers = [d for d in demo.get_config_file()["dependencies"] if d.get("trigger_after") == restore["id"]]
+        self.assertEqual(len(followers), 1)
+        self.assertIn("gschedDelivered", followers[0]["js"])
+        self.assertIn("'txt2img'", followers[0]["js"])
+        self.assertEqual(followers[0]["outputs"], [])
+
+    def test_queue_click_script_tags_the_job_with_a_token_for_its_tab(self):
+        built = [build_tab(self.wiring, tab)[0] for tab in ("txt2img", "img2img")]
+        self.wiring.connect_all()
+        demo = self.render(*built)
+        for tab in ("txt2img", "img2img"):
+            (dep,) = self.queue_dependency(demo, self.wiring.tabs[tab].queue_button)
+            self.assertIn("gschedNoteQueuePress", dep["js"])
+            self.assertIn(f"'{tab}'", dep["js"])
+            self.assertIn("Array.from(arguments)", dep["js"])
+
     def test_generate_wiring_is_left_untouched(self):
         blocks, generate, inputs = build_tab(self.wiring)
         self.wiring.connect_all()

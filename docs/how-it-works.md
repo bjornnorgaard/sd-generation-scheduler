@@ -60,6 +60,14 @@ The executor registers the job's `task(...)` id with Forge's progress tracker an
 
 `isQueueShortcut` recognises Ctrl/Cmd+Enter (without Alt) when the `gsched_override_ctrl_enter` option is on. The keydown listener runs in the capture phase and calls `stopImmediatePropagation`, so Forge's handler never also fires, then clicks the current tab's Queue button. Held-key repeats are swallowed so they can't flood the queue.
 
+## State Manager compatibility
+
+State Manager records the UI state by wrapping Forge's `submit()`, and saves it whenever a new image head appears in a gallery; with nothing recorded it shows an `alert`. Queue results arrive through the restore event, not `submit()`. So (only when `window.stateManager` exists):
+
+1. The Queue click script (`CAPTURE_JS_TEMPLATE`, async) calls `gschedNoteQueuePress(tab)`, which awaits `stateManager.getCurrentState(tab)` and returns a random token. The token travels in the otherwise unused task-id slot and is stored as `summary.client_token`. Awaiting matters: the snapshot is async and reads the controls after an internal await, so a fire-and-forget snapshot can pick up edits made after the click.
+2. When a job is attached to a gallery, `{tab, token}` is pushed on a FIFO. The restore event has a `.then` (`DELIVERED_JS_TEMPLATE`) that runs right after the images land and pops the oldest entry for that tab — one attach, one restore, one delivery — and sets `stateManager.lastUsedState` to that job's snapshot just before State Manager's debounced `checkHeadImage` runs.
+3. With no snapshot for the job (page reloaded, other window, snapshot failed or timed out after 3 s), `lastUsedState` is cleared (never reuse another job's) and State Manager's save is skipped once via a guard, with a `console.warn`. In every other situation its original code, alert included, still runs.
+
 ## The Queue tab
 
 `gsched_core.js` is pure (formatting, HTML strings, action → request); `gsched_queue.js` polls `/state` (1 s while the tab is open or work is queued, 4 s otherwise), renders into `#gsched-root` only when the HTML changed, delegates button clicks, and updates the tab title counter. All text is HTML-escaped.

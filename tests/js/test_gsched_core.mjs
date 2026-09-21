@@ -108,10 +108,26 @@ assert(!Core.isQueueShortcut(key({ altKey: true }), true), "alt+enter stays Skip
 assert(!Core.isQueueShortcut(key({ key: "Escape", ctrlKey: false }), true), "Esc stays Interrupt");
 assert(!Core.isQueueShortcut(key({ key: "a" }), true), "other keys are untouched");
 
+// makeToken / takeStateEntry
+const tok = Core.makeToken();
+assert(tok.startsWith("gsched-") && tok.length > 12 && tok.length <= 64, "token shape");
+assert(Core.makeToken() !== tok, "tokens differ");
+assertEqual(Core.makeToken(() => 0.5), "gsched-ii", "token is built from the random source (0.5 -> \"i\" in base 36)");
+const fifo = [{ tab: "txt2img", taskId: "a" }, { tab: "img2img", taskId: "b" }, { tab: "txt2img", taskId: "c" }];
+assertEqual(Core.takeStateEntry(fifo, "txt2img").taskId, "a", "oldest entry of the tab first");
+assertEqual(Core.takeStateEntry(fifo, "txt2img").taskId, "c", "then the next one, skipping other tabs");
+assertEqual(Core.takeStateEntry(fifo, "txt2img"), null, "none left for the tab");
+assertEqual(fifo.map((e) => e.taskId), ["b"], "other tabs' entries stay put");
+
 // previewPlan
 const running = (id, kind, extra) => ({ running: { id, kind }, progress: Object.assign({ task_id: `task(${kind}-${id})`, step: 1, steps: 8 }, extra) });
 const idle = { attachedId: null, busyTabs: { txt2img: false, img2img: false } };
-assertEqual(Core.previewPlan(running(1, "txt2img"), idle), { attach: { tab: "txt2img", taskId: "task(txt2img-1)" }, clear: false }, "attach to running txt2img job");
+assertEqual(Core.previewPlan(running(1, "txt2img"), idle), { attach: { tab: "txt2img", taskId: "task(txt2img-1)", token: null }, clear: false }, "attach to running txt2img job");
+assertEqual(
+    Core.previewPlan({ running: { id: 1, kind: "txt2img", summary: { client_token: "gsched-xyz" } }, progress: { task_id: "task(txt2img-1)" } }, idle).attach.token,
+    "gsched-xyz",
+    "plan carries the job's client token",
+);
 assertEqual(Core.previewPlan(running(2, "img2img"), idle).attach.tab, "img2img", "attach to running img2img job in its own tab");
 assertEqual(Core.previewPlan(running(1, "txt2img"), { ...idle, attachedId: "task(txt2img-1)" }), { attach: null, clear: false }, "already attached: nothing to do");
 assertEqual(Core.previewPlan(running(2, "txt2img"), { ...idle, attachedId: "task(txt2img-1)" }).attach.taskId, "task(txt2img-2)", "next job attaches even if the previous one was attached");

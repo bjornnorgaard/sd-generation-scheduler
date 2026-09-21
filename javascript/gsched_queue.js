@@ -79,6 +79,85 @@
             });
     }
 
+    // -- State Manager compatibility ---------------------------------------------------------
+    //
+    // sd-webui-state-manager records the UI state when Generate is pressed and saves it when a new
+    // image shows up in the gallery. Queue results arrive without Generate being pressed, so it
+    // would find no state and pop up "No previous state found.". If it is installed we therefore
+    // snapshot its state when Queue is pressed and hand it back when that job's images arrive.
+    // Without State Manager none of this does anything.
+
+    const stateFifo = []; // {tab, taskId, token} per job shown in a gallery, oldest first
+    const snapshots = new Map(); // token -> Promise<state | null>
+    const MAX_SNAPSHOTS = 100;
+    const SKIP_WINDOW_MS = 5000;
+    const SNAPSHOT_TIMEOUT_MS = 3000;
+    let skipSaveUntil = 0;
+
+    function stateManager() {
+        const sm = window.stateManager;
+        const usable = sm && typeof sm.getCurrentState === "function" && typeof sm.saveLastUsedState === "function";
+        return usable ? sm : null;
+    }
+
+    /**
+     * Called (and awaited) by the Queue button's click script; resolves to the token stored on the
+     * job. Waits for State Manager's snapshot so it reflects the controls as they were at the
+     * click, but never longer than SNAPSHOT_TIMEOUT_MS.
+     */
+    window.gschedNoteQueuePress = async function (tab) {
+        const token = Core.makeToken();
+        const sm = stateManager();
+        if (!sm) return token;
+
+        let snapshot = null;
+        try {
+            const timeout = new Promise((resolve) => setTimeout(() => resolve(null), SNAPSHOT_TIMEOUT_MS));
+            snapshot = await Promise.race([Promise.resolve(sm.getCurrentState(tab)), timeout]);
+        } catch (error) {
+            console.warn("[Generation Scheduler] State Manager snapshot failed:", error);
+        }
+        snapshots.set(token, Promise.resolve(snapshot || null));
+        while (snapshots.size > MAX_SNAPSHOTS) snapshots.delete(snapshots.keys().next().value);
+        return token;
+    };
+
+    // Only when we have no snapshot for a delivered job (page reloaded, queued from another window)
+    // is State Manager's save skipped — with a console warning instead of its alert. Any other
+    // situation still reaches its original code, errors included.
+    function installSaveGuard(sm) {
+        if (sm.gschedGuard) return;
+        const original = sm.saveLastUsedState;
+        sm.saveLastUsedState = function () {
+            if (!sm.lastUsedState && Date.now() < skipSaveUntil) {
+                skipSaveUntil = 0;
+                return undefined;
+            }
+            return original.apply(this, arguments);
+        };
+        sm.gschedGuard = true;
+    }
+
+    /** Called by the hidden restore event's follow-up, right after the job's images hit the gallery. */
+    window.gschedDelivered = async function (tab) {
+        const entry = Core.takeStateEntry(stateFifo, tab);
+        const sm = stateManager();
+        if (!entry || !sm) return [];
+        installSaveGuard(sm);
+        const snapshot = entry.token ? await snapshots.get(entry.token) : null;
+        if (snapshot) {
+            sm.lastUsedState = snapshot;
+        } else {
+            sm.lastUsedState = null; // never reuse the previous job's state for this one
+            skipSaveUntil = Date.now() + SKIP_WINDOW_MS;
+            console.warn(
+                `[Generation Scheduler] No State Manager snapshot for ${entry.taskId} (queued before a page reload ` +
+                    "or from another window); it won't be added to State Manager's history.",
+            );
+        }
+        return [];
+    };
+
     /** Is a manual Generate running in this tab? (Forge shows its Interrupt button then.) */
     function isGenerateBusy(tab) {
         const interrupt = app().getElementById(`${tab}_interrupt`);
@@ -90,7 +169,7 @@
      * Forge's progress bar + live preview, Interrupt / Skip buttons, and — once the job is done —
      * its images (delivered by the hidden restore button, see wiring.py).
      */
-    function showJobInGallery(tab, taskId) {
+    function showJobInGallery(tab, taskId, token) {
         const container = app().getElementById(`${tab}_gallery_container`);
         const gallery = app().getElementById(`${tab}_gallery`);
         if (!container || typeof requestProgress !== "function") return;
@@ -105,7 +184,10 @@
         window.gschedRestoreId = window.gschedRestoreId || {};
         window.gschedRestoreId[tab] = taskId;
         const restore = app().getElementById(`${tab}_gsched_restore`);
-        if (restore) restore.click();
+        if (restore) {
+            stateFifo.push({ tab, taskId, token });
+            restore.click();
+        }
     }
 
     function updateGalleryPreview(state) {
@@ -114,7 +196,7 @@
             busyTabs: { txt2img: isGenerateBusy("txt2img"), img2img: isGenerateBusy("img2img") },
         });
         if (plan.clear) attachedId = null;
-        if (plan.attach) showJobInGallery(plan.attach.tab, plan.attach.taskId);
+        if (plan.attach) showJobInGallery(plan.attach.tab, plan.attach.taskId, plan.attach.token);
     }
 
     function render(state) {

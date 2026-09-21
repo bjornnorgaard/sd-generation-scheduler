@@ -18,6 +18,10 @@ Ctrl+Enter (Cmd+Enter on macOS) presses **Queue** instead of Generate — always
 
 To interrupt or skip use the buttons, Esc (interrupt) or Alt+Enter (skip) — those are unchanged. If the queue is paused the toast says so and nothing starts until you press **Start queue**. Turn the override off in [settings](settings.md) to get Forge's behaviour back.
 
+## Compatibility: State Manager
+
+With [sd-webui-state-manager](https://github.com/SenshiSentou/sd-webui-state-manager) installed, queued jobs are added to its history like normal generations — with the settings from the moment you pressed **Queue**, not whatever the controls show when the job finishes. (Without this, State Manager alerts `No previous state found.` because queue results reach the gallery without Generate being pressed.) If a job was queued from another browser window, or before you reloaded the page, no snapshot exists for it: it is skipped in State Manager's history and a warning is written to the browser console.
+
 ## The Queue tab
 
 | Area | What it shows / does |
