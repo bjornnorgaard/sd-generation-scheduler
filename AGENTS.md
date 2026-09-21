@@ -61,3 +61,32 @@ tests/e2e/run_forge.sh                            # then drive http://127.0.0.1:
 When changing rendering, extend `tests/js/test_gsched_core.mjs`. When changing wiring, extend `tests/test_wiring.py` (real Gradio) — it builds a miniature of Forge's tab. When changing what Forge internals are called, extend `tests/fake_forge.py` + `tests/test_executor.py`.
 
 Known gap: real sampling and real checkpoint switching have only been checked against fakes (they need a model and a free GPU).
+
+## Versioning and releases
+
+This repo follows [Semantic Versioning](https://semver.org). **Git tags are the version of record** — there is no version file to keep in sync.
+
+- Tags are annotated and named `vMAJOR.MINOR.PATCH` (e.g. `v0.3.1`), created on `main`.
+- **MAJOR stays `0`.** Do not release `1.0.0` (or any `1.x`) unless the owner explicitly says the project is ready. While on `0.x`, a breaking change bumps MINOR.
+- **MINOR** — a new user-facing feature or capability; a new or changed setting, default, shortcut, or `/gsched/v1` route; a changed queue database schema; any breaking change.
+- **PATCH** — a bug fix, a compatibility fix (e.g. with another extension or a Forge update), or a performance / robustness improvement with no new capability.
+- **No tag** — docs, tests, the e2e harness, refactors, or `AGENTS.md` edits that do not change shipped behaviour.
+- If `git tag` is empty, the first release is `v0.1.0`.
+
+Whenever you commit and push a releasable change to `main`, tag it in the same push:
+
+```bash
+git describe --tags --abbrev=0                      # latest version (none yet -> v0.1.0)
+# ... commit the change on main ...
+git tag -a vX.Y.Z -m "vX.Y.Z: <one-line summary>"    # on the commit that ships the change
+git push origin main vX.Y.Z                         # commit and tag together
+git ls-remote --tags origin vX.Y.Z                  # verify it arrived
+```
+
+Rules:
+
+- Pick the bump from the *whole* change, not the last commit. When several changes ship together, use the highest bump.
+- Never move, delete, or re-push a tag that has been pushed. If a release was wrong, ship a new PATCH.
+- Never push a tag without its commit, and never tag a commit that is not on `main`.
+- Only commit / push when the user has asked you to (as elsewhere); the tag is part of that push, not a separate ask.
+- In your reply, state the version you tagged and why that bump.
